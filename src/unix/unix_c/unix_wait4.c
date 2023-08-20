@@ -24,7 +24,7 @@
 CAMLextern int caml_convert_signal_number(int);
 CAMLextern int caml_rev_convert_signal_number(int);
 
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(__HAIKU__)
 
 #if !(defined(WIFEXITED) && defined(WEXITSTATUS) && defined(WIFSTOPPED) && \
       defined(WSTOPSIG) && defined(WTERMSIG))
