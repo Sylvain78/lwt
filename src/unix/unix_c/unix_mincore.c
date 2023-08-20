@@ -15,7 +15,7 @@
 
 #include "lwt_unix.h"
 
-#ifdef __CYGWIN__
+#if (defined(__CYGWIN__) || defined(__HAIKU__))
 LWT_NOT_AVAILABLE4(unix_mincore)
 #elif defined __OpenBSD__
 #include <sys/syscall.h>
