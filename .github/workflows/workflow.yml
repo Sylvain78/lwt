@@ -1,8 +1,10 @@
-name: Builds, tests & co
+name: Builds, tests
 
 on:
   pull_request:
   push:
+    branches:
+    - master
   schedule:
     # Prime the caches every Monday
     - cron: 0 1 * * MON
@@ -25,99 +27,62 @@ jobs:
           - "5.0"
           - "5.1"
           - "5.2"
+          - "5.3"
         libev:
           - true
           - false
-        ppx:
-          - true
-        local-packages:
-          - |
-            *.opam
         include:
-          - os: ubuntu-latest
-            ocaml-compiler: ocaml-variants.5.2.0+options,ocaml-option-flambda,ocaml-option-musl,ocaml-option-static,ocaml-option-no-compression
+          - os: ubuntu-24.04-arm
+            ocaml-compiler: "5.3"
             libev: false
-            ppx: true
-            local-packages: |
-              *.opam
           - os: macos-latest
-            ocaml-compiler: "5.2"
-            libev: true
-            ppx: true
-            local-packages: |
-              *.opam
-          - os: windows-latest
-            ocaml-compiler: "5.2"
+            ocaml-compiler: "5.3"
             libev: false
-            ppx: true
-            local-packages: |
-              *.opam
+          - os: windows-latest
+            ocaml-compiler: "5.3"
+            libev: false
           - os: ubuntu-latest
-            ocaml-compiler: "5.2"
-            libev: true
-            ppx: false
-            local-packages: |
-              *.opam
-              !lwt_ppx.opam
-          - os: macos-latest
-            ocaml-compiler: "5.2"
-            libev: true
-            ppx: false
-            local-packages: |
-              *.opam
-              !lwt_ppx.opam
-          - os: windows-latest
-            ocaml-compiler: "5.2"
+            ocaml-name: "5.3.0+32bit"
+            ocaml-compiler: "ocaml-variants.5.3.0+options,ocaml-option-32bit"
             libev: false
-            ppx: false
-            local-packages: |
-              *.opam
-              !lwt_ppx.opam
+
 
     runs-on: ${{ matrix.os }}
 
+    name:
+       ${{ matrix.ocaml-name != '' && matrix.ocaml-name || matrix.ocaml-compiler}} / ${{ matrix.os }} / libev=${{ matrix.libev}}
+
     steps:
+
       - name: Checkout tree
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set-up OCaml
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
-          opam-local-packages: ${{ matrix.local-packages }}
+
+      - name: set ppx-related variables
+        id: configppx
+        shell: bash
+        run: |
+          opam exec -- ocaml src/util/letppx.ml
+          opam exec -- ocaml src/util/letppx.ml >> "$GITHUB_OUTPUT"
 
       - run: opam install conf-libev
         if: ${{ matrix.libev == true }}
 
-      - run: opam install lwt_react lwt --deps-only --with-test
+      - run: opam install ./lwt.opam ./lwt_react.opam ./lwt_retry.opam ./lwt_ppx.opam --deps-only --with-test
 
-      - run: opam install lwt_ppx lwt_ppx_let --deps-only --with-test
-        if: ${{ matrix.ppx == true }}
+      - run: opam install ./lwt_ppx__ppx_let_tests.opam --deps-only --with-test
+        if: ${{ fromJSON(steps.configppx.outputs.letppx) }}
 
-      - run: opam exec -- dune build --only-packages lwt_react,lwt
+      - run: opam exec -- dune build --only-packages lwt,lwt_react,lwt_retry
 
-      - run: opam exec -- dune build --only-packages lwt_ppx
-        if: ${{ matrix.ppx == true }}
+      - run: opam exec -- dune build --only-packages lwt,lwt_ppx__ppx_let_tests
+        if: ${{ fromJSON(steps.configppx.outputs.letppx) }}
 
-      - run: opam exec -- dune runtest --only-packages lwt_react,lwt
+      - run: opam exec -- dune runtest --only-packages lwt,lwt_react,lwt_retry,lwt_ppx
 
-      - run: opam exec -- dune runtest --only-packages lwt_ppx
-        if: ${{ matrix.ppx == true }}
-
-      - run: opam exec -- make ppx_let-test
-        if: ${{ matrix.ppx == true }}
-
-  lint-opam:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout tree
-        uses: actions/checkout@v4
-
-      - name: Set-up OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: "5.2"
-          dune-cache: true
-
-      - uses: ocaml/setup-ocaml/lint-opam@v3
+      - run: opam exec -- dune runtest --only-packages lwt,lwt_ppx__ppx_let_tests
+        if: ${{ fromJSON(steps.configppx.outputs.letppx) }}
